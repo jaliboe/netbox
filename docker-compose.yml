@@ -1,6 +1,7 @@
 services:
   netbox: &netbox
     image: docker.io/netboxcommunity/netbox:${VERSION-v4.1-3.0.2}
+    container_name: netbox-demo-1
     depends_on:
       - postgres
       - redis
@@ -13,12 +14,19 @@ services:
       timeout: 3s
       interval: 15s
     volumes:
-      - ./configuration:/etc/netbox/config:z,ro
-      - netbox-media-files:/opt/netbox/netbox/media:rw
-      - netbox-reports-files:/opt/netbox/netbox/reports:rw
-      - netbox-scripts-files:/opt/netbox/netbox/scripts:rw
+      - /volume3/docker/netbox/configuration:/etc/netbox/config:z,ro
+      - /volume3/docker/netbox/netbox-media-files:/opt/netbox/netbox/media:rw
+      - /volume3/docker/netbox/netbox-reports-files:/opt/netbox/netbox/reports:rw
+      - /volume3/docker/netbox/netbox-scripts-files:/opt/netbox/netbox/scripts:rw
+    networks:
+      frontend:
+        ipv4_address: 192.168.200.19
+        ipv6_address: fd00:0:0:200::19
+      nb-backend:
+  
   netbox-worker:
     <<: *netbox
+    container_name: netbox-worker-demo-1more 
     depends_on:
       netbox:
         condition: service_healthy
@@ -31,8 +39,12 @@ services:
       start_period: 20s
       timeout: 3s
       interval: 15s
+    networks:
+      - nb-backend
+  
   netbox-housekeeping:
     <<: *netbox
+    container_name: netbox-housekeeping-demo-1
     depends_on:
       netbox:
         condition: service_healthy
@@ -43,10 +55,13 @@ services:
       start_period: 20s
       timeout: 3s
       interval: 15s
+    networks:
+      - nb-backend
 
   # postgres
   postgres:
     image: docker.io/postgres:16-alpine
+    container_name: netbox-postgres-demo-1
     healthcheck:
       test: pg_isready -q -t 2 -d $$POSTGRES_DB -U $$POSTGRES_USER
       start_period: 20s
@@ -55,11 +70,14 @@ services:
       retries: 5
     env_file: env/postgres.env
     volumes:
-      - netbox-postgres-data:/var/lib/postgresql/data
+      - /volume3/docker/netbox/netbox-postgres-data:/var/lib/postgresql/data
+    networks:
+      - nb-backend
 
   # redis
   redis:
     image: docker.io/valkey/valkey:8.0-alpine
+    container_name: netbox-redis-demo-1
     command:
       - sh
       - -c # this is to evaluate the $REDIS_PASSWORD from the env
@@ -72,9 +90,13 @@ services:
       retries: 5
     env_file: env/redis.env
     volumes:
-      - netbox-redis-data:/data
+      - /volume3/docker/netbox/netbox-redis-data:/data
+    networks:
+      - nb-backend
+  
   redis-cache:
     image: docker.io/valkey/valkey:8.0-alpine
+    container_name: netbox-cache-demo-1
     command:
       - sh
       - -c # this is to evaluate the $REDIS_PASSWORD from the env
@@ -82,18 +104,13 @@ services:
     healthcheck: *redis-healthcheck
     env_file: env/redis-cache.env
     volumes:
-      - netbox-redis-cache-data:/data
+      - /volume3/docker/netbox/netbox-redis-cache-data:/data
+    networks:
+      - nb-backend
 
-volumes:
-  netbox-media-files:
-    driver: local
-  netbox-postgres-data:
-    driver: local
-  netbox-redis-cache-data:
-    driver: local
-  netbox-redis-data:
-    driver: local
-  netbox-reports-files:
-    driver: local
-  netbox-scripts-files:
-    driver: local
+networks:
+  frontend:
+    name: mvl-200
+    external: true
+  nb-backend:
+    external: true
